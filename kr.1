@@ -1,0 +1,126 @@
+.TH KR 1
+
+.SH NAME
+\fBkr\fP \- A simple file encryption/decryption tool.
+.SH SYNOPSIS
+.B kr [\fBOPERATIONS\fR] [\fBOPTIONS\fR] [\fBin\fR] [\fBout\fR]
+
+.SH DESCRIPTION
+
+\fBkr\fR is a simple file encryption/decryption program based on
+\fBMonocypher\fR. Under the hood, it uses the incremental
+AEAD interface of Monocypher to encrypt/decrypt files using
+\fBXChaCha20-Poly1305\fR.
+
+\fBkr\fR offers two modes of operation:
+.TP
+\fBKeyfile-based\fR:
+A private key is stored on the user's machine and is used to encrypt and decrypt
+files.
+.TP
+\fBPassphrase-based\fR:
+An encryption/decryption key is generated from a passphrase, on the fly, using
+Argon2i (with a random salt).
+.P
+Moreover, \fBkr\fR can help you generate symetric keys that may be totally
+random, or \fIdeterministic\fR (i.e., reproductible) that can be regenerated at
+will given the same passphrase and uid. Both types of keys (random and uid-based
+ones) may also be protected using a passphrase.
+
+.SH ARGUMENTS
+.TP
+\fB[in]\fP input file. If no input file is given, use \fBstdin\fP.
+.TP
+\fB[out]\fP output file. If no output file is given, use \fBstdout\fP.
+
+.SH OPERATIONS
+.TP
+\fB\-e\fP, \fB\-\-encrypt\fR
+Encrypt \fB[in]\fR and put the output into \fB[out]\fR.
+.TP
+\fB\-d\fP, \fB\-\-decrypt\fP
+Decrypt \fB[in]\fR and put the output into \fB[out]\fR.
+.TP
+\fB\-g\fP, \fB\-\-generate\fP
+Generate a key and put it into \fB[out]\fR.
+.TP
+ \fB\-c\fR,  \fB\-\-edit\fR \fB<keyfile>\fR
+ Edit \fB<keyfile>\fR by changing, removing or adding a protection passphrase.
+.TP
+\fB\-h\fP, \fB\-\-help\fP
+Display a usage message.
+.TP
+\fB\-V\fP, \fB\-\-version\fP
+Display the version information.
+
+.SH OPTIONS
+.TP
+\fB\-k\fR, \fB\-\-key\fR \fIkeyfile\fP
+Use the key in \fBkeyfile\fP for encryption/decryption operations.
+.TP
+\fB\-p\fR, \fB\-\-passphrase\fR \fI[pass]\fP
+Use the passphrase \fB[pass]\fR for for operations. If the passphrase is not
+specified, prompt the user to type it (Twice for encryption and keyfile
+generation. Once for decryption).
+.TP
+\fB\-u\fR, \fB\-\-uid\fR \fI<uid>\fP
+Use \fB<uid>\fR for key generation (\fB\-g\fR). Use \fB<uid>\fR for
+reproductible key generation (\-g). When used, the program will ask for a
+passphrase in order to generate a deterministic key, i.e., the same key for the
+same <uid> and passphrase. When \fB<uid>\fR is not given, the generated key will
+be random.
+
+.SH NOTES
+.TP
+Source repository:
+https://github.com/ewd340/kr
+
+.SH EXAMPLES
+.TP
+Encrypt \fBinputfile\fP into \fBoutputfile\fP using the key \fB~/.key.sec\fP
+
+$ kr \-e \-k ~/.key.sec inputfile outputfile
+.TP
+Decrypt \fBinputfile\fP into \fBoutputfile\fP using the key \fB~/.key.sec\fP
+
+$ kr \-d \-k ~/.key.sec inputfile outputfile
+.TP
+Encrypt \fBinputfile\fP into \fBoutputfile\fP using passphrase \fB"PASS PHRASE"\fP
+
+$ kr \-e \-p"PASS PHRASE" inputfile outputfile
+.TP
+Encrypt \fBinputfile\fP into \fBoutputfile\fP prompt the user for a
+passphrase\fP
+
+$ kr \-e \-p inputfile outputfile
+.TP
+Ask for a passphrase and generate a deterministic  key and put it in
+\fB~/.key.sec\fP.
+
+$ kr \-g \-\-uid=someone ~/.key.sec
+.TP
+Generate a random key and put it in \fB~/.key.sec\fP.
+
+$ kr \-g  ~/.key.sec
+.TP
+Edit the key file \fB~/.key.sec\fP.
+
+$ kr \-c  ~/.key.sec
+.TP
+Using pipes: take input from \fBstdin\fP and output to \fBstdout\fP.
+
+$ echo 'Hello, world!' | kr \-ek ~/.key.sec | kr \-dk ~/.key.sec
+.TP
+In the same vein, \fBtar\fR and pipe to \fBkr\fR and vice-versa.
+
+$ tar \-cz src | kr \-ek ~/.key.sec \- src.tar.gz.kr
+
+.TP
+Decrypting this encrypted tar:
+
+$ kr \-dk ~/.key.sec src.tar.gz.kr | tar \-xzv
+
+.SH REPORTING BUGS
+.TP
+Bugs can be reported on GitHub at:
+https://github.com/ewd340/kr/issues
