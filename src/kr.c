@@ -186,7 +186,7 @@ static const char *usage[] = {
 "                             The user can protect the generated key with",
 "                             a passphrase.",
 "",
-"   -c | --edit <keyfile>     Edit <keyfile> by changing, removing,",
+"   -m | --edit <keyfile>     Edit <keyfile> by changing, removing,",
 "                             or adding a protection passphrase.",
 "",
 "   -h | --help               Display this usage message.",
@@ -544,7 +544,7 @@ int main(int argc, char *argv[])
         {"keyfile", 'k', OPTPARSE_REQUIRED},
         {"passphrase", 'p', OPTPARSE_OPTIONAL},
         {"uid", 'u', OPTPARSE_REQUIRED},
-        {"keyedit", 'c', OPTPARSE_REQUIRED},
+        {"keyedit", 'm', OPTPARSE_REQUIRED},
         {"help", 'h', OPTPARSE_NONE},
         {"version", 'V', OPTPARSE_NONE},
         {0}
@@ -588,7 +588,7 @@ int main(int argc, char *argv[])
             case 'k':
                 keyfile = options.optarg;
                 break;
-            case 'c':
+            case 'm':
                 mode = MODE_KEYEDIT;
                 keyfile = options.optarg;
                 break;

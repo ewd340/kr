@@ -44,7 +44,7 @@ Decrypt \fB[in]\fR and put the output into \fB[out]\fR.
 \fB\-g\fP, \fB\-\-generate\fP
 Generate a key and put it into \fB[out]\fR.
 .TP
- \fB\-c\fR,  \fB\-\-edit\fR \fB<keyfile>\fR
+\fB\-m\fR,  \fB\-\-edit\fR \fB<keyfile>\fR
  Edit \fB<keyfile>\fR by changing, removing or adding a protection passphrase.
 .TP
 \fB\-h\fP, \fB\-\-help\fP
@@ -105,7 +105,7 @@ $ kr \-g  ~/.key.sec
 .TP
 Edit the key file \fB~/.key.sec\fP.
 
-$ kr \-c  ~/.key.sec
+$ kr \-m  ~/.key.sec
 .TP
 Using pipes: take input from \fBstdin\fP and output to \fBstdout\fP.
 

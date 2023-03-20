@@ -83,13 +83,13 @@ $ kr --generate --uid=USERID --passphrase="PASS PHRASE" ~/key.sec
 Note that if the output keyfile is not provided in the two commands above, the
 key will be output to `stdout`.
 
-#### Editing Keyfiles `-c`
+#### Editing Keyfiles `-m`
 
 One can add, edit, or remove the protection passphrase of a given keyfile simply
-by using the `--edit` (or `-c`) option as follows:
+by using the `--edit` (or `-m`) option as follows:
 
 ```
-$ kr -c ~/key.sec
+$ kr -m ~/key.sec
 ```
 
 ### Encryption/Decryption
