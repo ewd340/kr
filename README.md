@@ -51,10 +51,10 @@ To generate a random key, one can simply invoke `kr` as follows:
 ```
 $ kr -g ~/key.sec
 ```
-The user is, then,  prompted to type a passphrase if they want to protect the
+The user is, then, prompted to type a passphrase if they want to protect the
 generated key.
 
-#### Predictable Keyfiles Generation `-g -u`
+#### Deterministic Keyfiles Generation `-g -u`
 
 Instead of storing private keys on disk and carrying them from a machine to
 another, one can opt to generate them on the spot every time they need them.
@@ -85,14 +85,17 @@ key will be output to `stdout`.
 
 #### Editing Keyfiles `-m`
 
-One can add, edit, or remove the protection passphrase of a given keyfile simply
-by using the `--edit` (or `-m`) option as follows:
+The user can add, edit, or remove the protection passphrase of a given keyfile
+simply by using the `--edit` (or `-m`) option as follows:
 
 ```
 $ kr -m ~/key.sec
 ```
 
 ### Encryption/Decryption
+
+Now, to the core feature of `kr`: encryption and decryption. These can be done
+with either keyfiles or passphrases.
 
 #### Keyfile-based Encryption/Decryption
 
@@ -179,17 +182,19 @@ $ echo 'Hello, world!' | kr -ek ~/.key.sec | kr -dk ~/.key.sec
 will output, as you might have guessed it, the string `Hello, world!`.
 
 
-**A note on passphrases**: It is not advisable to use passphrases in clear in
+**A note on passphrases**: It is not advised to use passphrases in clear in
 the command line. They will most probably be stored in your shell's history.
 Thus, leaving the `-p` option empty and making the program prompt you to type
-the passphrase is preferable.
+the passphrase is preferable. Moreover, it is often advised to use randomly
+generated passphrases (such as those made using
+the [Diceware](https://theworld.com/~reinhold/diceware.html) technique).
 
 ## Disclaimer and thanks
 
 I am *not* a cryptologist. This code is written for my own use. Use it at your
-own risk. It is provided as is, and put in the public domain (please see the
-UNLICENSE file). Your contributions, ideas, fixes, and suggestions are most
-welcome.
+own risk. It is provided as is, without warranty of any kind, and put in the
+public domain (please see the UNLICENSE file). Your contributions, ideas, fixes,
+and suggestions are most welcome.
 
 A special *thank you!* goes to:
 
