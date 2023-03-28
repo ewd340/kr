@@ -211,7 +211,7 @@ static const char *usage[] = {
 NULL
 };
 
-// Encrypt the 'in' file, using the key 'key' and the nonce inside 'header'
+// Encrypt the 'in' file, using the key 'key' and the nonce 'nonce'
 // and write encrypted chunks to the 'out' file.
 static enum error encrypt(FILE *in, FILE *out, const uint8_t key[KEY_SIZE],
                           const uint8_t nonce[NONCE_SIZE])
@@ -256,7 +256,7 @@ static enum error encrypt(FILE *in, FILE *out, const uint8_t key[KEY_SIZE],
     return err;
 }
 
-// Decrypt the 'in' file, using the key 'key' and the nonce inside 'header'
+// Decrypt the 'in' file, using the key 'key' and the nonce 'nonce'
 // and write decrypted chunks to the 'out' file.
 static enum error decrypt(FILE *in, FILE *out, const uint8_t key[KEY_SIZE],
                           const uint8_t nonce[NONCE_SIZE])
