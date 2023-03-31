@@ -407,7 +407,7 @@ static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     int pwlen = 0;
 
     size_t len = read_bytes(kf, content, KEYFILE_SIZE);
-    if (!len && ferror(kf)) {
+    if ((len != KEYFILE_SIZE) || ferror(kf)) {
         BAIL(ERR_READ);
     }
 
