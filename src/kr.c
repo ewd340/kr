@@ -422,8 +422,8 @@ static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     uint8_t *version = mac + MAC_SIZE;
     uint8_t *fkey = version + 1;
 
-    // Inspect the protection-version byte
-    int protected = *version & 0xFF;
+    // Inspect the protection-version byte, and get its MSB.
+    int protected = *version >> 7;
     if (!protected) {
         // Key is not protected. Copy the last KEY_SIZE bytes. 
         memcpy(key, fkey, KEY_SIZE);
