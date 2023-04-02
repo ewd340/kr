@@ -518,7 +518,7 @@ bail:
 }
 
 // Print the usage message.
-static void print_usage()
+static void print_usage(void)
 {
     const char **s = usage;
     while (*s) {
@@ -528,7 +528,7 @@ static void print_usage()
 }
 
 // Print the version information.
-static void print_version()
+static void print_version(void)
 {
     fputs(PROG " " PROG_VERSION "\n", stdout);
 }
