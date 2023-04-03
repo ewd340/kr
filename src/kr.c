@@ -119,11 +119,11 @@ static const char *errmsg[] = {
 
 // Operation modes of the program.
 enum operation {
-  MODE_NONE,
-  MODE_ENCRYPT,
-  MODE_DECRYPT,
-  MODE_KEYGEN,
-  MODE_KEYEDIT,
+    MODE_NONE,
+    MODE_ENCRYPT,
+    MODE_DECRYPT,
+    MODE_KEYGEN,
+    MODE_KEYEDIT,
 };
 
 // Configuration structure for the 'get_passphrase()' function.
