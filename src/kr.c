@@ -142,11 +142,6 @@ struct passphrase_config {
 // mode. This array (kind of a map) is used by 'get_passphrase()' to behave
 // differently depending on the mode by which it is called.
 static const struct passphrase_config passphrase_configs[] = {
-    [MODE_NONE] = {
-        .prompt = "",
-        .prompt_repeat = "",
-        .confirm = 0
-    },
     [MODE_ENCRYPT] = {
         .prompt = "passphrase:",
         .prompt_repeat = "passphrase (repeat):",
