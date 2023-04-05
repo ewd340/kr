@@ -124,6 +124,8 @@ enum operation {
     MODE_DECRYPT,
     MODE_KEYGEN,
     MODE_KEYEDIT,
+    MODE_USAGE,
+    MODE_VERSION,
 };
 
 // Configuration structure for the 'get_passphrase()' function.
@@ -569,12 +571,13 @@ int main(int argc, char *argv[])
     enum error err = ERR_OK;
     int exitcode = 0;
 
+    int stop = 0;
     int option;
     struct optparse options;
 
     (void)argc;
     optparse_init(&options, argv);
-    while ((option = optparse_long(&options, longopts, NULL)) != -1) {
+    while (!stop && (option = optparse_long(&options, longopts, NULL)) != -1) {
         switch (option) {
             case 'g':
                 mode = MODE_KEYGEN;
@@ -613,13 +616,15 @@ int main(int argc, char *argv[])
                 }
                 break;
             case 'V':
-                print_version();
-                BAIL(ERR_OK);
+                mode = MODE_VERSION;
+                stop = 1;
+                break;
             case '?':
             case 'h':
             default:
-                print_usage();
-                BAIL(ERR_OK);
+                mode = MODE_USAGE;
+                stop = 1;
+                break;
         }
     }
 
@@ -635,9 +640,8 @@ int main(int argc, char *argv[])
         if (err != ERR_OK) {
             BAIL(err);
         }
-    } else if (!pwlen && (mode != MODE_KEYGEN)) {
-        print_usage();
-        BAIL(ERR_OK);
+    } else if (!use_passphrase && mode != MODE_KEYGEN && mode != MODE_VERSION) {
+        mode = MODE_USAGE;
     }
 
     // Set the standard input and output to binary mode (_WIN32)
@@ -751,9 +755,12 @@ int main(int argc, char *argv[])
                 BAIL(err);
             }
             break;
+        case MODE_VERSION:
+            print_version();
+            break;
         case MODE_NONE:
+        case MODE_USAGE:
             print_usage();
-            BAIL(ERR_OK);
     }
 
 // Clean everything and exit.
