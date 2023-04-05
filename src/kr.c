@@ -124,13 +124,13 @@ static const char *errmsg[] = {
 
 // Operation modes of the program.
 enum operation {
-    MODE_NONE,
-    MODE_ENCRYPT,
-    MODE_DECRYPT,
-    MODE_KEYGEN,
-    MODE_KEYEDIT,
-    MODE_USAGE,
-    MODE_VERSION,
+    MODE_NONE       = 1 << 0,
+    MODE_ENCRYPT    = 1 << 1,
+    MODE_DECRYPT    = 1 << 2,
+    MODE_KEYGEN     = 1 << 3,
+    MODE_KEYEDIT    = 1 << 4,
+    MODE_USAGE      = 1 << 5,
+    MODE_VERSION    = 1 << 6,
 };
 
 // Configuration structure for the 'get_passphrase()' function.
@@ -652,7 +652,7 @@ int main(int argc, char *argv[])
 
     // Open the input file.
     // infile is only needed for encryption and decryption.
-    if (mode == MODE_ENCRYPT || mode == MODE_DECRYPT) {
+    if (mode & (MODE_ENCRYPT | MODE_DECRYPT)) {
         infile =  optparse_arg(&options);
         in = !infile || !strcmp(infile, "-") ? stdin : fopen(infile, "rb");
         if (!in) {
@@ -662,7 +662,7 @@ int main(int argc, char *argv[])
 
     // Open the output file.
     // outfile is needed for encryption, decryption, and keygen.
-    if (mode == MODE_ENCRYPT || mode == MODE_DECRYPT || mode == MODE_KEYGEN) {
+    if (mode & (MODE_ENCRYPT | MODE_DECRYPT | MODE_KEYGEN)) {
         outfile =  optparse_arg(&options);
         out = !outfile ? stdout : fopen(outfile, "wb");
         if (!out) {
