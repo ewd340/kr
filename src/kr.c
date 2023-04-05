@@ -96,6 +96,7 @@ enum error {
     ERR_VERSION_MISMATCH,
     ERR_UID,
     ERR_UID_TOO_BIG,
+    ERR_USAGE,
 };
 
 // Error messages associated with the error codes above.
@@ -115,6 +116,10 @@ static const char *errmsg[] = {
     [ERR_VERSION_MISMATCH] = "Version mismatch",
     [ERR_UID] = "UID missing",
     [ERR_UID_TOO_BIG] = "UID must be less than 255 bytes",
+    // errmsg[ERR_USAGE] starts with ". " because it follows an optparse errmsg.
+    // e.g., option requires an argument -- 'k'. Use -h (or --help) for usage.
+    // e.g., invalid option -- 'z'. Use -h (or --help) for usage.
+    [ERR_USAGE] = ". Use -h (or --help) for usage.",
 };
 
 // Operation modes of the program.
@@ -616,6 +621,8 @@ int main(int argc, char *argv[])
                 stop = 1;
                 break;
             case '?':
+                BAIL(ERR_USAGE);
+                break;
             case 'h':
             default:
                 mode = MODE_USAGE;
@@ -774,7 +781,8 @@ bail:
 
     // Display error message if any.
     if (err != ERR_OK) {
-        fprintf(stderr, "%s: %s\n", PROG, errmsg[err]);
+        fprintf(stderr, "%s: %s", PROG, options.errmsg);
+        fprintf(stderr, "%s\n", errmsg[err]);
         exitcode = 1;
     }
 
