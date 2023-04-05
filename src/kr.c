@@ -366,11 +366,13 @@ static enum error get_passphrase(uint8_t *passphrase, size_t size, int *len,
     if (r0 < 0) {
         BAIL(ERR_PASS_TOO_BIG);
     }
+    // If no protection is needed, do not ask for a confirmation.
+    if ((mode == MODE_KEYEDIT) && (!passphrase[0])) {
+        *len = r0;
+        return ERR_OK;
+    }
+    // Otherwise, ask for a confirmattion if needed.
     if (config.confirm) {
-        // If no protection is needed, do not ask for a confirmation.
-        if ((mode == MODE_KEYEDIT) && (!passphrase[0])) {
-            BAIL(ERR_OK);
-        }
         uint8_t tmp[MAXPASS];
         int r1 = read_password(tmp, sizeof(tmp), config.prompt_repeat);
         if (r1 == 0) {
@@ -424,7 +426,6 @@ static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     if (!protected) {
         // Key is not protected. Copy the last KEY_SIZE bytes. 
         memcpy(key, fkey, KEY_SIZE);
-        BAIL(ERR_OK);
     } else {
         // Ask the user to provide a passphrase to decrypt the key.
         err = get_passphrase(passphrase, MAXPASS, &pwlen, MODE_DECRYPT);
