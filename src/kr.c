@@ -644,17 +644,18 @@ int main(int argc, char *argv[])
     binary_stdio();
 
     // Open the input file.
-    // infile is not needed for MODE_KEYGEN.
-    if (mode != MODE_KEYGEN && mode != MODE_KEYEDIT) {
+    // infile is only needed for encryption and decryption.
+    if (mode == MODE_ENCRYPT || mode == MODE_DECRYPT) {
         infile =  optparse_arg(&options);
         in = !infile || !strcmp(infile, "-") ? stdin : fopen(infile, "rb");
-        if (!in && (mode != MODE_KEYGEN)) {
+        if (!in) {
             BAIL(ERR_INPUT_FILE);
         }
     }
 
     // Open the output file.
-    if (mode != MODE_KEYEDIT) {
+    // outfile is needed for encryption, decryption, and keygen.
+    if (mode == MODE_ENCRYPT || mode == MODE_DECRYPT || mode == MODE_KEYGEN) {
         outfile =  optparse_arg(&options);
         out = !outfile ? stdout : fopen(outfile, "wb");
         if (!out) {
