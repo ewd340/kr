@@ -631,6 +631,14 @@ int main(int argc, char *argv[])
         }
     }
 
+    // If the mode doesn't use keyfile and use_passphrase, reset them.
+    if (mode & (MODE_NONE | MODE_VERSION | MODE_USAGE)) {
+        keyfile = NULL;
+        use_passphrase = 0;
+        // If no mode of usage has been chosen, set mode to MODE_USAGE.
+        mode = (mode == MODE_NONE) ? MODE_USAGE : mode;
+    }
+
     // What are we using?  A keyfile or a passphrase?
     if (keyfile) { // Keyfile-based operations.
         kf = fopen(keyfile, "rb");
