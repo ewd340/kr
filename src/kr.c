@@ -116,10 +116,7 @@ static const char *errmsg[] = {
     [ERR_VERSION_MISMATCH] = "Version mismatch",
     [ERR_UID] = "UID missing",
     [ERR_UID_TOO_BIG] = "UID must be less than 255 bytes",
-    // errmsg[ERR_USAGE] starts with ". " because it follows an optparse errmsg.
-    // e.g., option requires an argument -- 'k'. Use -h (or --help) for usage.
-    // e.g., invalid option -- 'z'. Use -h (or --help) for usage.
-    [ERR_USAGE] = ". Use -h (or --help) for usage.",
+    [ERR_USAGE] = "Use -h (or --help) for usage.",
 };
 
 // Operation modes of the program.
@@ -789,8 +786,11 @@ bail:
 
     // Display error message if any.
     if (err != ERR_OK) {
-        fprintf(stderr, "%s: %s", PROG, options.errmsg);
-        fprintf(stderr, "%s\n", errmsg[err]);
+        if (err == ERR_USAGE) { // display Optparse's errormsg first.
+            fprintf(stderr, "%s: %s. %s\n", PROG, options.errmsg, errmsg[err]);
+        } else {
+            fprintf(stderr, "%s: %s\n", PROG, errmsg[err]);
+        }
         exitcode = 1;
     }
 
