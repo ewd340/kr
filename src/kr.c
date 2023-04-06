@@ -643,7 +643,7 @@ int main(int argc, char *argv[])
         if (err != ERR_OK) {
             BAIL(err);
         }
-    } else if (!use_passphrase && mode != MODE_KEYGEN && mode != MODE_VERSION) {
+    } else if (mode & (MODE_ENCRYPT | MODE_DECRYPT)) {
         mode = MODE_USAGE;
     }
 
