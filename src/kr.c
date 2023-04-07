@@ -704,8 +704,8 @@ int main(int argc, char *argv[])
             // If the key has a passphrase, by editing it, we can change or
             // remove the passphrase. If does not, we can add a protection
             // passphrase.
-            fclose(kf); // close the keyfile, and reopen it in write mode.
-            if (!(kf = fopen(keyfile, "wb"))) {
+            // Reopen keyfile in read/write mode.
+            if (!(kf = freopen(keyfile, "rb+", kf))) {
                BAIL(ERR_KEYFILE);
             }
             err = write_keyfile(kf, key);
