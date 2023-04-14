@@ -166,6 +166,26 @@ static const struct passphrase_config passphrase_configs[] = {
     },
 };
 
+// Default key derivation configuration for gen_key.
+// This configuration will be used by default, when the ser does not specify a
+// configutaion for password-based key generation.
+static const crypto_argon2_config gen_key_config = {
+    .algorithm = CRYPTO_ARGON2_I,
+    .nb_blocks = ARGON_NB_BLOCKS,
+    .nb_passes = ARGON_NB_ITERATIONS,
+    .nb_lanes  = ARGON_NB_LANES
+};
+
+// Default key derication extras (for Argon2i). For now, our gen_key function
+// doesn't need a 'key' or an 'ad', and thus uses this default struct for
+// defaults.
+static const crypto_argon2_extras gen_key_extras = {
+    .key = NULL,
+    .key_size = 0,
+    .ad = NULL,
+    .ad_size  = 0
+};
+
 // Usage text displayed with the option '-h' (--help).
 static const char *usage[] = {
 "USAGE: kr [OPERATION] [OPTIONS] [in] [out]",
@@ -304,11 +324,15 @@ static enum error decrypt(FILE *in, FILE *out, const uint8_t key[KEY_SIZE],
     return err;
 }
 
-// Generate a KEY_SIZE bytes key from a passphrase and a salt (random)
-// using Argon2i. This needs a work area that has to be allocated.
-// If this allocation fails, securely wipe the passphrase and exit.
-static enum error gen_key(uint8_t *passphrase, size_t passphrase_size,
-                          uint8_t *salt, uint8_t key[KEY_SIZE])
+// Generate a key_size bytes key from a passphrase and a salt (random)
+// using Argon2i (with configuration in 'config', inputs (password and salt) 
+// data in 'inputs'), and extras (key and ad). This needs a work area that
+// has to be allocated. If this allocation fails, securely wipe inputs and
+// extras and exit.
+static enum error gen_key(crypto_argon2_config config,
+                          crypto_argon2_inputs inputs,
+                          crypto_argon2_extras extras,
+                          size_t key_size, uint8_t *key)
 {
     enum error err = ERR_OK;
     void *work_area = malloc(ARGON_NB_BLOCKS * 1024);
@@ -318,35 +342,11 @@ static enum error gen_key(uint8_t *passphrase, size_t passphrase_size,
         BAIL(ERR_NO_KEY);
     }
 
-    crypto_argon2_config cfg = {
-        .algorithm = CRYPTO_ARGON2_I,
-        .nb_blocks = ARGON_NB_BLOCKS,
-        .nb_passes = ARGON_NB_ITERATIONS,
-        .nb_lanes  = ARGON_NB_LANES
-    };
-
-    crypto_argon2_inputs inputs = {
-        .pass = passphrase,
-        .salt = salt, 
-        .pass_size = passphrase_size,
-        .salt_size = ARGON_SALT_SIZE 
-    };
-
-    crypto_argon2_extras extras = {
-        .key = NULL,
-        .ad = NULL,
-        .key_size = 0,
-        .ad_size = 0
-    };
-
-    crypto_argon2(key, KEY_SIZE, work_area, cfg, inputs, extras);
-
+    crypto_argon2(key, key_size, work_area, config, inputs, extras);
     free(work_area);
-    crypto_wipe(&cfg, sizeof(crypto_argon2_config));
+bail:
     crypto_wipe(&inputs, sizeof(crypto_argon2_inputs));
     crypto_wipe(&extras, sizeof(crypto_argon2_extras));
-bail:
-    crypto_wipe(passphrase, passphrase_size);
     return err;
 }
 
@@ -404,7 +404,7 @@ static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     enum error err = ERR_OK;
     uint8_t content[KEYFILE_SIZE];
     uint8_t passphrase[MAXPASS];
-    uint8_t prot_key[KEY_SIZE];
+    uint8_t pkey[KEY_SIZE];
     int pwlen = 0;
 
     size_t len = read_bytes(kf, content, KEYFILE_SIZE);
@@ -435,19 +435,25 @@ static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
             BAIL(err);
         }
         // Generate the protection key using this passphrase and the nonce.
-        err = gen_key(passphrase, pwlen, nonce, prot_key);
+        crypto_argon2_inputs inputs = {
+            .pass = passphrase,
+            .pass_size = pwlen,
+            .salt = nonce,
+            .salt_size = ARGON_SALT_SIZE
+        };
+        err = gen_key(gen_key_config, inputs, gen_key_extras, KEY_SIZE, pkey);
         if (err != ERR_OK) {
             BAIL(err);
         }
         // Decrypt the key in the file (i.e., 'fkey') into 'key'.
         // If it fails, bail out.
-        if (crypto_aead_unlock(key, mac, prot_key, nonce, NULL, 0, fkey,
+        if (crypto_aead_unlock(key, mac, pkey, nonce, NULL, 0, fkey,
                                KEY_SIZE) < 0) {
             BAIL(ERR_INVALID);
         }
     }
 bail: // Clear sensitive data, and return err.
-    crypto_wipe(prot_key, sizeof(prot_key));
+    crypto_wipe(pkey, sizeof(pkey));
     crypto_wipe(passphrase, sizeof(passphrase));
     return err;
 }
@@ -460,7 +466,7 @@ bail: // Clear sensitive data, and return err.
 // last KEY_SIZE bytes of 'content'.
 // 2) if the passphrase is not empty, then:
 // 2-a) We set the 'protection bit' to '1'.
-// 2-b) We generate an encryption key (prot_key) using the given passphrase and
+// 2-b) We generate an encryption key (pkey) using the given passphrase and
 // the 'nonce' (first NONCE_SIZE bytes of 'content'), and encrypt the provided
 // key 'key' and put the encrypted key in the last KEY_SIZE bytes of 'content'.
 // 3) We write the 'content' to 'kf'.
@@ -469,7 +475,7 @@ static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     enum error err = ERR_OK;
     uint8_t content[KEYFILE_SIZE];
     uint8_t passphrase[MAXPASS]; // Key protection passphrase.
-    uint8_t prot_key[KEY_SIZE];
+    uint8_t pkey[KEY_SIZE];
     int pwlen = 0; // Length of protection passphrase.
 
     // Some pointers according to this keyfile format:
@@ -500,12 +506,18 @@ static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
         *version = 0x80 | KEYFILE_VERSION;
         // Generate an encryption key (for the given key) using the passphrase
         // and the nonce (located at the beginning of 'content').
-        err = gen_key(passphrase, pwlen, nonce, prot_key);
+        crypto_argon2_inputs inputs = {
+            .pass = passphrase,
+            .pass_size = pwlen,
+            .salt = nonce,
+            .salt_size = ARGON_SALT_SIZE
+        };
+        err = gen_key(gen_key_config, inputs, gen_key_extras, KEY_SIZE, pkey);
         if (err != ERR_OK) {
             BAIL(err);
         }
         // Encrypt the given key using the generated key.
-        crypto_aead_lock(fkey, mac, prot_key, nonce, NULL, 0, key, KEY_SIZE);
+        crypto_aead_lock(fkey, mac, pkey, nonce, NULL, 0, key, KEY_SIZE);
     }
     // Write the key (content) into kf.
     if (write_bytes(kf, content, KEYFILE_SIZE) != KEYFILE_SIZE) {
@@ -513,7 +525,7 @@ static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     }
 bail:
     crypto_wipe(passphrase, sizeof(passphrase));
-    crypto_wipe(prot_key, sizeof(prot_key));
+    crypto_wipe(pkey, sizeof(pkey));
     return err;
 }
 
@@ -558,6 +570,8 @@ int main(int argc, char *argv[])
     uint8_t uid_hash[ARGON_SALT_SIZE]; // User ID hash to be used as a salt.
     int pwlen = 0; // passphrase length
     int uilen = 0; //uid length
+    crypto_argon2_config gk_config = gen_key_config;
+    crypto_argon2_extras gk_extras = gen_key_extras;
 
     char *keyfile = NULL;
     char *infile = NULL;
@@ -688,7 +702,13 @@ int main(int argc, char *argv[])
                 // Hash the uid to use it as a salt for key derivation.
                 crypto_blake2b(uid_hash, ARGON_SALT_SIZE, uid, uilen);
                 // Generate a key using the passphrase and this salt.
-                err = gen_key(passphrase, pwlen, uid_hash, key);
+                crypto_argon2_inputs inputs = {
+                    .pass = passphrase,
+                    .pass_size = pwlen,
+                    .salt = uid_hash,
+                    .salt_size = ARGON_SALT_SIZE
+                };
+                err = gen_key(gk_config, inputs, gk_extras, KEY_SIZE, key);
                 if (err != ERR_OK) {
                     BAIL(err);
                 }
@@ -725,7 +745,13 @@ int main(int argc, char *argv[])
             // If passphrase-based encryption, generate a key from the
             // passphrase and the first ARGON_SALT_SIZE bytes in the header.
             if (use_passphrase) {
-                err = gen_key(passphrase, pwlen, header, key);
+                crypto_argon2_inputs inputs = {
+                    .pass = passphrase,
+                    .pass_size = pwlen,
+                    .salt = header,
+                    .salt_size = ARGON_SALT_SIZE
+                };
+                err = gen_key(gk_config, inputs, gk_extras, KEY_SIZE, key);
                 if (err != ERR_OK) {
                     BAIL(err);
                 }
@@ -752,7 +778,13 @@ int main(int argc, char *argv[])
             // If passphrase-based decryption, generate a key from the
             // passphrase and the first ARGON_SALT_SIZE bytes in the header.
             if (use_passphrase) {
-                err = gen_key(passphrase, pwlen, header, key);
+                crypto_argon2_inputs inputs = {
+                    .pass = passphrase,
+                    .pass_size = pwlen,
+                    .salt = header,
+                    .salt_size = ARGON_SALT_SIZE
+                };
+                err = gen_key(gk_config, inputs, gk_extras, KEY_SIZE, key);
                 if (err != ERR_OK) {
                     BAIL(err);
                 }
