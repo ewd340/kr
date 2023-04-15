@@ -241,6 +241,14 @@ static enum error encrypt(FILE *in, FILE *out, const uint8_t key[KEY_SIZE],
     uint8_t buf_in[CHUNKLEN];
     uint8_t buf_out[CHUNKLEN + MAC_SIZE];
 
+    if (!in) {
+        BAIL(ERR_INPUT_FILE);
+    }
+
+    if (!out) {
+        BAIL(ERR_OUTPUT_FILE);
+    }
+
     crypto_aead_ctx ctx;
     crypto_aead_init_x(&ctx, key, nonce);
 
@@ -270,6 +278,7 @@ static enum error encrypt(FILE *in, FILE *out, const uint8_t key[KEY_SIZE],
         }
     } while(!eof);
 
+bail:
     crypto_wipe(&ctx, sizeof(ctx)); // securely wipe the context.
     crypto_wipe(buf_in, CHUNKLEN); // securely wipe the buf_in.
     return err;
@@ -285,6 +294,14 @@ static enum error decrypt(FILE *in, FILE *out, const uint8_t key[KEY_SIZE],
 
     uint8_t buf_out[CHUNKLEN];
     uint8_t buf_in[CHUNKLEN + MAC_SIZE];
+
+    if (!in) {
+        BAIL(ERR_INPUT_FILE);
+    }
+
+    if (!out) {
+        BAIL(ERR_OUTPUT_FILE);
+    }
 
     crypto_aead_ctx ctx;
     crypto_aead_init_x(&ctx, key, nonce);
@@ -319,6 +336,7 @@ static enum error decrypt(FILE *in, FILE *out, const uint8_t key[KEY_SIZE],
         }
     } while(!eof);
 
+bail:
     crypto_wipe(&ctx, sizeof(ctx)); // securely wipe the context.
     crypto_wipe(buf_out, CHUNKLEN); // securely wipe the buf_out.
     return err;
@@ -407,6 +425,10 @@ static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     uint8_t pkey[KEY_SIZE];
     int pwlen = 0;
 
+    if (!kf) {
+        BAIL(ERR_INPUT_FILE);
+    }
+
     size_t len = read_bytes(kf, content, KEYFILE_SIZE);
     if ((len != KEYFILE_SIZE) || ferror(kf)) {
         BAIL(ERR_READ);
@@ -477,6 +499,10 @@ static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     uint8_t passphrase[MAXPASS]; // Key protection passphrase.
     uint8_t pkey[KEY_SIZE];
     int pwlen = 0; // Length of protection passphrase.
+
+    if (!kf) {
+        BAIL(ERR_OUTPUT_FILE);
+    }
 
     // Some pointers according to this keyfile format:
     // +----------------+------------+----------------------+-------------+
