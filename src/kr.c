@@ -81,7 +81,7 @@ uint8_t END_TAG[4] = "LAST"; // Additional Data (tag) for the last chunk.
 
 // Error codes used in this program.
 enum error {
-    ERR_OK,
+    ERR_OK = 0,
     ERR_KEYFILE,
     ERR_INPUT_FILE,
     ERR_OUTPUT_FILE,
@@ -849,7 +849,7 @@ bail:
         } else {
             fprintf(stderr, "%s: %s\n", PROG, errmsg[err]);
         }
-        exitcode = 1;
+        exitcode = err;
     }
 
     return exitcode;
