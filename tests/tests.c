@@ -325,9 +325,6 @@ int u_encrypt_decrypt(void)
     enum error err = ERR_OK;
     uint8_t key[KEY_SIZE];
     uint8_t nonce[NONCE_SIZE];
-    uint8_t  data[MAX_FILE_SIZE] = {0};
-    uint8_t dec_buf[MAX_FILE_SIZE] = {0};
-    uint64_t fsize = 0;
     FILE *in, *out;
 
     fillrand(key, KEY_SIZE);
@@ -370,6 +367,7 @@ int u_encrypt_decrypt(void)
     return status;
 }
 
+
 // Test gen_key using the provided vector by Monocypher.
 void gen_key_test(vector_reader *reader)
 {
@@ -399,6 +397,7 @@ void gen_key_test(vector_reader *reader)
 
     gen_key(config, inputs, extras, out.size, out.buf);
 }
+
 
 // Test encrypt/decrypt using passphrases.
 int p_password_enc_dec(void)
@@ -469,6 +468,7 @@ int p_password_enc_dec(void)
            status != 0 ? FAILED: OK, "Passphrase-based operations");
     return status;
 }
+
 
 // Test encrypt/decrypt using keyfiles.
 int p_keyfile_enc_dec(void)
@@ -560,6 +560,7 @@ int u_gen_random_keyfile(void)
     return status;
 }
 
+
 // Test deterministic keyfiles generation
 int u_gen_deterministic_keyfile(void)
 {
@@ -629,6 +630,7 @@ int test_usage_and_version(void)
     freopen("/dev/tty", "w", stdout);
     return 0;
 }
+
 
 int main(int argc, char **argv)
 {
