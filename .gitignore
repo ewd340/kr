@@ -1,3 +1,7 @@
 kr
 *.o
+*.profraw
+*.profdata
 tmp
+test.out
+cov
