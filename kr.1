@@ -70,6 +70,25 @@ passphrase in order to generate a deterministic key, i.e., the same key for the
 same <uid> and passphrase. When \fB<uid>\fR is not given, the generated key will
 be random.
 
+.SH Key-derivation parameters (optional)
+.TP
+The following parameters may be used to fine-tune the key derivation process
+when generating keys. i.e., with the operation -g (--generate)
+.TP
+\fB\-a\fR, \fB\-\-algorithm\fR \fI<alg>\fP
+Use \fB<alg>\fR as an algorithm for key derivation with \fb<alg>\fR being an
+integer which vales are:, 0 : Argon2d, 1: Argon2i, 2: Argon2id when this
+parameter is not sepcified the default value is \fb1\fR.
+.TP
+\fB\-i\fR, \fB\-\-iterations\fR \fI<iter>\fP
+Number of passes done by The algorithm \fb<alg>\fR (Default value: 3)
+.TP
+\fB\-l\fR, \fB\-\-lanes\fR \fI<l>\fP
+Level of parallelism (intger) for \fb<alg>\fR (Default value: 1)
+.TP
+\fB\-b\fR, \fB\-\-blocks\fR \fI<blks>\fP
+Number of blocks of 1024b of memory used by \fb<aig>\fR Default value: 1000)
+
 .SH NOTES
 .TP
 Source repository:
@@ -102,6 +121,11 @@ $ kr \-g \-\-uid=someone ~/.key.sec
 Generate a random key and put it in \fB~/.key.sec\fP.
 
 $ kr \-g  ~/.key.sec
+.TP
+Generate a random key and put it in \fB~/.key.sec\fP using some optional
+parameters (2000 blocks of memory and 4 iterations).
+
+$ kr \-g -b2000 -i4  ~/.key.sec
 .TP
 Edit the key file \fB~/.key.sec\fP.
 

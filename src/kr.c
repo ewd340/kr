@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include "platform.h"
 #include "monocypher.h"
 
@@ -12,19 +13,36 @@
 // Key file format
 // ===============
 //
-// +----------------+------------+----------------------+-------------+
-// |    24 bytes    |  16 bytes  |       1 byte         |   32 bytes  |
-// +----------------+------------+----------------------+-------------+
-// |  RANDOM NONCE  |     MAC    | PROTECTION | VERSION |     KEY     |
-// +----------------+------------+----------------------+-------------+
+// +----------+----------+----------------------+------------+-------------+
+// | 24 bytes | 16 bytes |        1 byte        |   7 bytes  |   32 bytes  |
+// +----------+----------+----------------------+------------+-------------+
+// |   NONCE  |   MAC    | PROTECTION | VERSION |  KD PARAMS |     KEY     |
+// +----------+----------+----------------------+------------+-------------+
 //
 // The most significant bit (farthest to the left) of the version byte
 // is the key protection status. If it set to '1', then the key is
 // protected using a passphrase. In this case, the key is decrypted
 // using a passphrase given by the user and the random nonce, and is
 // authenticated using the stored mac.
+//
 // Otherwise, the encryption/decryption key consists of the last 32 bytes
 // of the file
+//
+// In this version of the keyfile format, we also have 7 new bytes for Key
+// Derivation params (KD PARAMS) after the PROTECTION|VERSION byte as follows:
+//
+// +------------------------------------+
+// |    KEY DERIVATION (KD) PARAMS      |
+// +--------+--------+--------+---------+
+// | 1 byte | 1 byte | 1 byte | 4 bytes |
+// +--------+--------+--------+---------+
+// |  ALGO  |  ITERS |  LANES |  BLOCS  |
+// +--------+--------+--------+---------+
+//
+//  1 byte: The algorithm that is used for key derivation (Argon2i, Argon2id..)
+//  1 byte: Number of iterations
+//  1 byte: number of lanes (for Argon2)
+//  4 butes: Number of blocks of memory that are used for key derivation.
 //
 // Encrypted File header
 // =====================
@@ -50,13 +68,14 @@
 // backward compatibility issues.
 
 #define PROG "kr"
-#define PROG_VERSION "0.2" // The program's version.
+#define PROG_VERSION "0.3" // The program's version.
 #define FILE_VERSION 0 // Encrypted files format version.
 #define KEYFILE_VERSION 0 // keyfiles format version.
 #define KEY_SIZE 32
 #define NONCE_SIZE 24 // Using XChaCha20.
 #define MAC_SIZE 16
-#define KEYFILE_SIZE NONCE_SIZE + MAC_SIZE + 1 + KEY_SIZE // See diagram above.
+#define KD_PARAMS_SIZE 1 + 1 + 1 + 4 // KD Params: 7 bytes as described above.
+#define KEYFILE_SIZE NONCE_SIZE + MAC_SIZE + 1 + KD_PARAMS_SIZE + KEY_SIZE // See diagram above.
 #define HEADER_SIZE NONCE_SIZE + 1 + 7 // See diagram above.
 #define CHUNKLEN (128 << 10) - 16
 #define MAXPASS 255
@@ -96,6 +115,13 @@ enum error {
     ERR_VERSION_MISMATCH,
     ERR_UID,
     ERR_UID_TOO_BIG,
+    ERR_ALG_NOT_INT,
+    ERR_ALG_NOT_GOOD,
+    ERR_PASSES_NOT_INT,
+    ERR_PASSES_NOT_ENOUGH,
+    ERR_LANES_NOT_INT,
+    ERR_BLOCKS_NOT_INT,
+    ERR_BLOCKS_NOT_ENOUGH,
     ERR_USAGE,
 };
 
@@ -116,6 +142,13 @@ static const char *errmsg[] = {
     [ERR_VERSION_MISMATCH] = "Version mismatch",
     [ERR_UID] = "UID missing",
     [ERR_UID_TOO_BIG] = "UID must be less than 255 bytes",
+    [ERR_ALG_NOT_INT] = "The value of the -a option must be an integer",
+    [ERR_ALG_NOT_GOOD] = "The value of the -a option must be either 0, 1, or 2",
+    [ERR_PASSES_NOT_INT] = "The value to the -i option must be an integer",
+    [ERR_PASSES_NOT_ENOUGH] = "The number of passes must be at least 1.",
+    [ERR_LANES_NOT_INT] = "The value to the -l option must be an integer",
+    [ERR_BLOCKS_NOT_INT] = "The value to the -b option must be an integer",
+    [ERR_BLOCKS_NOT_ENOUGH] = "The number of blocks must be at least 8 times the number of lanes",
     [ERR_USAGE] = "Use -h (or --help) for usage.",
 };
 
@@ -186,6 +219,25 @@ static const crypto_argon2_extras gen_key_extras = {
     .ad_size  = 0
 };
 
+// Load a buffer of 4 uint8_t into a uint32_t.
+static uint32_t load32_le(const uint8_t s[4])
+{
+	return
+		((uint32_t)s[0] <<  0) |
+		((uint32_t)s[1] <<  8) |
+		((uint32_t)s[2] << 16) |
+		((uint32_t)s[3] << 24);
+}
+
+// Store a uint32_t in a buffer of 4 uint8_t.
+static void store32_le(uint8_t out[4], uint32_t in)
+{
+    out[0] =  in        & 0xff;
+    out[1] = (in >>  8) & 0xff;
+    out[2] = (in >> 16) & 0xff;
+    out[3] = (in >> 24) & 0xff;
+}
+
 // Usage text displayed with the option '-h' (--help).
 static const char *usage[] = {
 "USAGE: kr [OPERATION] [OPTIONS] [in] [out]",
@@ -227,6 +279,25 @@ static const char *usage[] = {
 "                             the same key for the same <uid> and passphrase.",
 "                             When <uid> is not given, the generated key will",
 "                             be random.",
+"",
+"Key-derivation parameters (optional):",
+"",
+"   The following parameters may be used to fine-tune the key derivation ",
+"   process when generating keys. i.e., with the operation -g (--generate) ",
+"",
+"   -a | --algorithm=<alg>    Use <alg> as an algorithm for key derivation with",
+"                             <alg> being an integer which vales are:",
+"                             0 : Argon2d, 1: Argon2i, 2: Argon2id",
+"                             (Default value: 1)",
+"",
+"   -i | --iterations=<i>     Number of passes done by The algorithm <alg>",
+"                             (Default value: 3)",
+"",
+"   -l | --lanes=<l>          Level of parallelism (intger) for <alg>",
+"                             (Default value: 1)",
+"",
+"   -b | --blocks=<blks>      Number of blocks of 1024b of memory used by <aig>",
+"                             (Default value: 1000)",
 NULL
 };
 
@@ -416,7 +487,9 @@ bail:
 // When protected using a passphrase, it should be decrypted using a key
 // that will be generated using the given passphrase, the nonce (first
 // NONCE_SIZE bytes of the file), and authenticated using the mac (next
-// MAC_SIZE bytes following the nonce).
+// MAC_SIZE bytes following the nonce). The key derivation, in this case, uses
+// the parameters that are stored in the 7 bytes (KD Params) following the
+// version byte.
 static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
 {
     enum error err = ERR_OK;
@@ -435,15 +508,32 @@ static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     }
 
     // Some pointers according to this keyfile format:
-    // +----------------+------------+----------------------+-------------+
-    // |    24 bytes    |  16 bytes  |       1 byte         |   32 bytes  |
-    // +----------------+------------+----------------------+-------------+
-    // |  RANDOM NONCE  |     MAC    | PROTECTION | VERSION |     KEY     |
-    // +----------------+------------+----------------------+-------------+
+    // +----------+----------+----------------------+------------+-------------+
+    // | 24 bytes | 16 bytes |        1 byte        |   7 bytes  |   32 bytes  |
+    // +----------+----------+----------------------+------------+-------------+
+    // |   NONCE  |   MAC    | PROTECTION | VERSION |  KD PARAMS |     KEY     |
+    // +----------+----------+----------------------+------------+-------------+
+    //
+    // +------------------------------------+
+    // |    KEY DERIVATION (KD) PARAMS      |
+    // +--------+--------+--------+---------+
+    // | 1 byte | 1 byte | 1 byte | 4 bytes |
+    // +--------+--------+--------+---------+
+    // |  ALGO  |  ITERS |  LANES |  BLOCS  |
+    // +--------+--------+--------+---------+
+
     uint8_t *nonce = content;
     uint8_t *mac = content + NONCE_SIZE;
     uint8_t *version = mac + MAC_SIZE;
-    uint8_t *fkey = version + 1;
+    uint8_t *params = version + 1;
+    // Get key derivation parameters from *param
+    uint8_t *algo = params;
+    uint8_t *iter = algo + 1;
+    uint8_t *lanes = iter + 1;
+    uint8_t *blocks = lanes + 1;
+    uint32_t nb_blocks = load32_le(blocks);
+    // The KEY_SIZE bytes forming the key.
+    uint8_t *fkey = params + KD_PARAMS_SIZE;
 
     // Inspect the protection-version byte, and get its MSB.
     int protected = *version >> 7;
@@ -463,7 +553,15 @@ static enum error read_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
             .salt = nonce,
             .salt_size = ARGON_SALT_SIZE
         };
-        err = gen_key(gen_key_config, inputs, gen_key_extras, KEY_SIZE, pkey);
+
+        crypto_argon2_config config = {
+            .algorithm = *algo,
+            .nb_blocks = nb_blocks,
+            .nb_passes = *iter,
+            .nb_lanes  = *lanes
+        };
+
+        err = gen_key(config, inputs, gen_key_extras, KEY_SIZE, pkey);
         if (err != ERR_OK) {
             BAIL(err);
         }
@@ -489,10 +587,15 @@ bail: // Clear sensitive data, and return err.
 // 2) if the passphrase is not empty, then:
 // 2-a) We set the 'protection bit' to '1'.
 // 2-b) We generate an encryption key (pkey) using the given passphrase and
-// the 'nonce' (first NONCE_SIZE bytes of 'content'), and encrypt the provided
-// key 'key' and put the encrypted key in the last KEY_SIZE bytes of 'content'.
+// the 'nonce' (first NONCE_SIZE bytes of 'content'). This process of generating
+// the protection key (pkey) is done using the configuration in 'config'.
+// Afterwards, we encrypt the provided key 'key' and put the encrypted key in
+// the last KEY_SIZE bytes of 'content'.
+// (Note: the configuration 'config' is stored in the KD params chunk of
+// content to be saved within the keyfile)
 // 3) We write the 'content' to 'kf'.
-static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
+static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE],
+                                const crypto_argon2_config config)
 {
     enum error err = ERR_OK;
     uint8_t content[KEYFILE_SIZE];
@@ -505,15 +608,31 @@ static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
     }
 
     // Some pointers according to this keyfile format:
-    // +----------------+------------+----------------------+-------------+
-    // |    24 bytes    |  16 bytes  |       1 byte         |   32 bytes  |
-    // +----------------+------------+----------------------+-------------+
-    // |  RANDOM NONCE  |     MAC    | PROTECTION | VERSION |     KEY     |
-    // +----------------+------------+----------------------+-------------+
+    // +----------+----------+----------------------+------------+-------------+
+    // | 24 bytes | 16 bytes |        1 byte        |   7 bytes  |   32 bytes  |
+    // +----------+----------+----------------------+------------+-------------+
+    // |   NONCE  |   MAC    | PROTECTION | VERSION |  KD PARAMS |     KEY     |
+    // +----------+----------+----------------------+------------+-------------+
+    //
+    // +------------------------------------+
+    // |    KEY DERIVATION (KD) PARAMS      |
+    // +--------+--------+--------+---------+
+    // | 1 byte | 1 byte | 1 byte | 4 bytes |
+    // +--------+--------+--------+---------+
+    // |  ALGO  |  ITERS |  LANES |  BLOCS  |
+    // +--------+--------+--------+---------+
+
     uint8_t *nonce = content;
     uint8_t *mac = content + NONCE_SIZE;
     uint8_t *version = mac + MAC_SIZE;
-    uint8_t *fkey = version + 1;
+    uint8_t *params = version + 1;
+    // KD Params pointers.
+    uint8_t *algo = params;
+    uint8_t *iter = algo + 1;
+    uint8_t *lanes = iter + 1;
+    uint8_t *blocks = lanes + 1;
+    // The KEY_SIZE bytes forming the key.
+    uint8_t *fkey = params + KD_PARAMS_SIZE;
 
     // fill the content with random bytes.
     if (fillrand(content, KEYFILE_SIZE)) { // returns 0 on success
@@ -530,6 +649,12 @@ static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
         err = ERR_OK;
     } else { // Protect the key with a passphrase and the random nonce.
         *version = 0x80 | KEYFILE_VERSION;
+
+        *algo = config.algorithm;
+        *iter = config.nb_passes;
+        *lanes = config.nb_lanes;
+        store32_le(blocks, config.nb_blocks);
+
         // Generate an encryption key (for the given key) using the passphrase
         // and the nonce (located at the beginning of 'content').
         crypto_argon2_inputs inputs = {
@@ -538,7 +663,7 @@ static enum error write_keyfile(FILE *kf, uint8_t key[KEY_SIZE])
             .salt = nonce,
             .salt_size = ARGON_SALT_SIZE
         };
-        err = gen_key(gen_key_config, inputs, gen_key_extras, KEY_SIZE, pkey);
+        err = gen_key(config, inputs, gen_key_extras, KEY_SIZE, pkey);
         if (err != ERR_OK) {
             BAIL(err);
         }
@@ -576,6 +701,10 @@ int main(int argc, char *argv[])
     enum operation mode = MODE_NONE;
 
     struct optparse_long longopts[] = {
+        {"algorithm", 'a', OPTPARSE_REQUIRED},
+        {"blocks", 'b', OPTPARSE_REQUIRED},
+        {"iterations", 'i', OPTPARSE_REQUIRED},
+        {"lanes", 'l', OPTPARSE_REQUIRED},
         {"generate", 'g', OPTPARSE_NONE},
         {"encrypt", 'e', OPTPARSE_NONE},
         {"decrypt", 'd', OPTPARSE_NONE},
@@ -617,6 +746,47 @@ int main(int argc, char *argv[])
     optparse_init(&options, argv);
     while (!stop && (option = optparse_long(&options, longopts, NULL)) != -1) {
         switch (option) {
+            case 'a':{
+                char *p;
+                gk_config.algorithm = strtol(options.optarg, &p, 10);
+                if (errno || *p) {
+                    BAIL(ERR_ALG_NOT_INT);
+                }
+                if (gk_config.algorithm > 2) {
+                    BAIL(ERR_ALG_NOT_GOOD);
+                }
+            }
+                break;
+            case 'i':{
+                char *p;
+                gk_config.nb_passes = strtol(options.optarg, &p, 10);
+                if (errno || *p) {
+                    BAIL(ERR_PASSES_NOT_INT);
+                }
+                if (gk_config.nb_blocks < 1) {
+                    BAIL(ERR_PASSES_NOT_ENOUGH);
+                }
+            }
+                break;
+            case 'l':{
+                char *p;
+                gk_config.nb_lanes = strtol(options.optarg, &p, 10);
+                if (errno || *p) {
+                    BAIL(ERR_LANES_NOT_INT);
+                }
+            }
+                break;
+            case 'b':{
+                char *p;
+                gk_config.nb_blocks = strtol(options.optarg, &p, 10);
+                if (errno || *p) {
+                    BAIL(ERR_BLOCKS_NOT_INT);
+                }
+                if (gk_config.nb_blocks < 8 * gk_config.nb_lanes) {
+                    BAIL(ERR_BLOCKS_NOT_ENOUGH);
+                }
+            }
+                break;
             case 'g':
                 mode = MODE_KEYGEN;
                 break;
@@ -740,7 +910,7 @@ int main(int argc, char *argv[])
                 }
             }
             // Write the random (or uid-based key) to the 'out' file.
-            err = write_keyfile(out, key);
+            err = write_keyfile(out, key, gk_config);
             if (err !=  ERR_OK) {
                 BAIL(err);
             }
@@ -754,7 +924,7 @@ int main(int argc, char *argv[])
             if (!(kf = freopen(keyfile, "rb+", kf))) {
                BAIL(ERR_KEYFILE);
             }
-            err = write_keyfile(kf, key);
+            err = write_keyfile(kf, key, gk_config);
             if (err !=  ERR_OK) {
                 BAIL(err);
             }

@@ -133,7 +133,7 @@ static int p_read_write_key(enum keytype kt)
     FILE *kf = fopen(NO_RIGHTS_FILENAME, "wb");
     err = read_keyfile(kf, key);
     status |= (err != ERR_INPUT_FILE);
-    err = write_keyfile(kf, key);
+    err = write_keyfile(kf, key, gen_key_config);
     status |= (err != ERR_OUTPUT_FILE);
 
     // No good keyfile size (trying to read short-sized i.e., truncated keyfile)
@@ -154,7 +154,7 @@ static int p_read_write_key(enum keytype kt)
 
         fillrand(key, KEY_SIZE);
         FILE *kf = fopen(KEY_FILENAME, "wb");
-        err = write_keyfile(kf, key);
+        err = write_keyfile(kf, key, gen_key_config);
         status |= (err != ERR_OK);
         fclose(kf);
         kf = fopen(KEY_FILENAME, "rb");
@@ -186,7 +186,7 @@ static int p_wrong_pass_cant_read_key(void)
 
         fillrand(key, KEY_SIZE);
         FILE *kf = fopen(KEY_FILENAME, "wb");
-        err = write_keyfile(kf, key);
+        err = write_keyfile(kf, key, gen_key_config);
         status |= (err != ERR_OK);
         fclose(kf);
         kf = fopen(KEY_FILENAME, "rb");
